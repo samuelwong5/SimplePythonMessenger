@@ -16,9 +16,11 @@ class MessageApp():
         self.msgs.config(state=DISABLED)
         self.inpt = Entry(root)
         self.inpt.place(x=10,y=310,width=200)
+        self.inpt.bind('<Return>', self.send)
         self.send_btn = Button(root, text='Send',command=self.send)
         self.send_btn.grid(sticky=W,pady=4)
         self.send_btn.place(x=220,y=310,width=50, height=20)
+        self.count = 0
         
         # config udp socket for sending messages
         self.send_addr = (host, port)
@@ -38,10 +40,13 @@ class MessageApp():
         
     def add_msg(self, text):
         self.msgs.config(state=NORMAL)
+        if self.count > 21:
+            self.msgs.delete('1.0', '2.0')
+        self.count += 1
         self.msgs.insert(INSERT, text + "\n")
         self.msgs.config(state=DISABLED)
         
-    def send(self):
+    def send(self, text=''):
         self.add_msg("YOU: " + self.inpt.get())
         self.send_sock.sendto(self.inpt.get(), self.send_addr)
         self.inpt.delete(0, 'end')        
