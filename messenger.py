@@ -201,44 +201,48 @@ def msg_listen(queue, port=13000):
 def msgr_init(queue):
     msgr = Messenger(queue, msgr_exit)
     
+    
 def msgr_exit():
     msg_read.terminate()
     msg_read.join()
     msg_proc.terminate()
     msg_proc.join()
   
-# ------- Terminal Messenger -------  
-def term_receive(buff=1024, port=13000):
-    UDPSock = socket(AF_INET, SOCK_DGRAM)
-    UDPSock.bind(('', port))
-    while True:
-        (data, addr) = UDPSock.recvfrom(buff)
-        print (addr[0] + ' - ' + data)
-    UDPSock.close()
+  
+class MessengerTerminal():
+    def __init__(self, ip, buff=1024, port=13000): 
+        self.recv_prc = Process(target=self.term_receive, args=(buff,port))
+        self.recv_prc.start()
+        self.port = port
+        self.host = ip
+        self.term_send()
+                
+    def term_receive(self, buff, port):
+        UDPSock = socket(AF_INET, SOCK_DGRAM)
+        UDPSock.bind(('', port))
+        while True:
+            (data, addr) = UDPSock.recvfrom(buff)
+            print (addr[0] + ' - ' + data)
+        UDPSock.close()
        
-        
-def term_send(host, buff=1024, port=13000):
-    addr = (host, port)
-    UDPSock = socket(AF_INET, SOCK_DGRAM)
-    while True:
-        data = raw_input("")
-        UDPSock.sendto(data, addr)
-        if data == "exit":
-            break
-    UDPSock.close()
-    p.terminate()
-    p.join()
-# ----------------------------------
+    def term_send(self):
+        addr = (self.host, self.port)
+        UDPSock = socket(AF_INET, SOCK_DGRAM)
+        while True:
+            data = raw_input("")
+            UDPSock.sendto(data, addr)
+            if data == "exit":
+                break
+        UDPSock.close()
+        self.recv_prc.terminate()
+        self.recv_prc.join()
 
 
 if __name__ == "__main__":    
     if '--no-gui' in sys.argv:
-        p = Process(target=term_receive)
-        p.start()
         for arg in sys.argv:
             if arg.count('.') == 3:
-                term_send(arg)
-                break
+                MessengerTerminal(arg)
     else:
         msg_queue = Queue()
         msg_read = Process(target=msg_listen, args=(msg_queue,))
