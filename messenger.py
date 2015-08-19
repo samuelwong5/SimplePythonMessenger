@@ -3,7 +3,7 @@ import os
 from socket import *
 import sys
 from Tkinter import *
-
+import tkMessageBox
 
 class Messenger():
     def __init__(self, queue, callback=None, port=13000):
@@ -75,7 +75,7 @@ class Messenger():
         while not self.term_queue.empty():
             addr = self.term_queue.get()
             if len(addr) == 1:
-                self.contact_dict[addr][0] = None            
+                self.contact_dict[addr[0]][0] = None            
             else:
                 self.group_chat_dict = [gc for gc in self.group_chat_dict if gc[0] != addr]
             
@@ -114,9 +114,13 @@ class Messenger():
                                   self.port)
                 
     def contact_remove(self, event=None): 
-        contact_name = self.contact_lb.selection_get()
-        self.contact_dict = {k:v for k,v in self.contact_dict.iteritems() if v[1] !=  contact_name}
-        self.contact_lb.delete(ANCHOR)
+        contacts = self.contact_lb.curselection()
+        contact_names = [self.contact_lb.get(i) for i in contacts]
+        result = tkMessageBox.askquestion('Remove', 'Are you sure you want to remove contacts: ' + ', '.join(contact_names), icon='warning')
+        if result == 'yes':
+            self.contact_dict = {k:v for k,v in self.contact_dict.iteritems() if v[1] not in  contact_names}
+            for i in sorted(contacts, reverse=True):
+                self.contact_lb.delete(i)
      
     def contact_add(self, event=None):
         ip = self.ip_inpt.get()
