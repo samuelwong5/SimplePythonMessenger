@@ -3,7 +3,7 @@ import os
 from socket import *
 import sys
 from Tkinter import *
-
+import tkMessageBox
 
 class Messenger():
     def __init__(self, queue, callback=None, port=13000):
@@ -13,7 +13,6 @@ class Messenger():
         self.group_chat_dict = []    # Array of group chats
         self.term_queue = Queue()    # Queue for chat window exit
         # self.contact_dict = {'172.27.19.126' : [None, 'TestServer']}
-        
         # Initialize GUI
         self.root = Tk()
         self.root.wm_title('spm')
@@ -75,7 +74,7 @@ class Messenger():
         while not self.term_queue.empty():
             addr = self.term_queue.get()
             if len(addr) == 1:
-                self.contact_dict[addr][0] = None            
+                self.contact_dict[addr[0]][0] = None            
             else:
                 self.group_chat_dict = [gc for gc in self.group_chat_dict if gc[0] != addr]
             
@@ -114,9 +113,13 @@ class Messenger():
                                   self.port)
                 
     def contact_remove(self, event=None): 
-        contact_name = self.contact_lb.selection_get()
-        self.contact_dict = {k:v for k,v in self.contact_dict.iteritems() if v[1] !=  contact_name}
-        self.contact_lb.delete(ANCHOR)
+        contacts = self.contact_lb.curselection()
+        contact_names = [self.contact_lb.get(i) for i in contacts]
+        result = tkMessageBox.askquestion('Remove', 'Are you sure you want to remove contacts: ' + ', '.join(contact_names), icon='warning')
+        if result == 'yes':
+            self.contact_dict = {k:v for k,v in self.contact_dict.iteritems() if v[1] not in  contact_names}
+            for i in sorted(contacts, reverse=True):
+                self.contact_lb.delete(i)
      
     def contact_add(self, event=None):
         ip = self.ip_inpt.get()
@@ -188,6 +191,35 @@ class MessageChatWindow():
         self.term_queue.put(self.send_addr)
         self.root.destroy()
         
+  
+class MessengerTerminal():
+    def __init__(self, ip, buff=1024, port=13000): 
+        self.recv_prc = Process(target=self.term_receive, args=(buff,port), daemon=True)
+        self.recv_prc.start()
+        self.port = port
+        self.host = ip
+        self.term_send()
+                
+    def term_receive(self, buff, port):
+        UDPSock = socket(AF_INET, SOCK_DGRAM)
+        UDPSock.bind(('', port))
+        while True:
+            (data, addr) = UDPSock.recvfrom(buff)
+            print (addr[0] + ' - ' + data)
+        UDPSock.close()
+       
+    def term_send(self):
+        addr = (self.host, self.port)
+        UDPSock = socket(AF_INET, SOCK_DGRAM)
+        while True:
+            data = raw_input("")
+            UDPSock.sendto(data, addr)
+            if data == "exit":
+                break
+        UDPSock.close()
+        self.recv_prc.terminate()
+        self.recv_prc.join()   
+        
         
 def msg_listen(queue, port=13000):
     buff = 1024
@@ -198,50 +230,26 @@ def msg_listen(queue, port=13000):
         queue.put((data,addr))
 
     
-def msgr_init(queue):
-    msgr = Messenger(queue, msgr_exit)
+def msgr_init():
+    msg_queue = Queue()
+    msg_read = Process(target=msg_listen, args=(msg_queue,))
+    msg_read.daemon = True
+    msg_read.start()
+    msgr = Messenger(msg_queue, msgr_exit)
+    
     
 def msgr_exit():
     msg_read.terminate()
     msg_read.join()
     msg_proc.terminate()
     msg_proc.join()
-  
-# ------- Terminal Messenger -------  
-def term_receive(buff=1024, port=13000):
-    UDPSock = socket(AF_INET, SOCK_DGRAM)
-    UDPSock.bind(('', port))
-    while True:
-        (data, addr) = UDPSock.recvfrom(buff)
-        print (addr[0] + ' - ' + data)
-    UDPSock.close()
-       
-        
-def term_send(host, buff=1024, port=13000):
-    addr = (host, port)
-    UDPSock = socket(AF_INET, SOCK_DGRAM)
-    while True:
-        data = raw_input("")
-        UDPSock.sendto(data, addr)
-        if data == "exit":
-            break
-    UDPSock.close()
-    p.terminate()
-    p.join()
-# ----------------------------------
 
 
 if __name__ == "__main__":    
     if '--no-gui' in sys.argv:
-        p = Process(target=term_receive)
-        p.start()
         for arg in sys.argv:
             if arg.count('.') == 3:
-                term_send(arg)
-                break
+                MessengerTerminal(arg)
     else:
-        msg_queue = Queue()
-        msg_read = Process(target=msg_listen, args=(msg_queue,))
-        msg_read.start()
-        msg_proc = Process(target=msgr_init, args=(msg_queue,))
-        msg_proc.start()
+        msgr_proc = Process(target=msgr_init)
+        msgr_proc.start()
