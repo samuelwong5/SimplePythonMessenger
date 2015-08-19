@@ -13,7 +13,6 @@ class Messenger():
         self.group_chat_dict = []    # Array of group chats
         self.term_queue = Queue()    # Queue for chat window exit
         # self.contact_dict = {'172.27.19.126' : [None, 'TestServer']}
-        
         # Initialize GUI
         self.root = Tk()
         self.root.wm_title('spm')
@@ -192,30 +191,10 @@ class MessageChatWindow():
         self.term_queue.put(self.send_addr)
         self.root.destroy()
         
-        
-def msg_listen(queue, port=13000):
-    buff = 1024
-    recv_sock = socket(AF_INET, SOCK_DGRAM)
-    recv_sock.bind(('', port))
-    while True:
-        (data, addr) = recv_sock.recvfrom(buff)
-        queue.put((data,addr))
-
-    
-def msgr_init(queue):
-    msgr = Messenger(queue, msgr_exit)
-    
-    
-def msgr_exit():
-    msg_read.terminate()
-    msg_read.join()
-    msg_proc.terminate()
-    msg_proc.join()
-  
   
 class MessengerTerminal():
     def __init__(self, ip, buff=1024, port=13000): 
-        self.recv_prc = Process(target=self.term_receive, args=(buff,port))
+        self.recv_prc = Process(target=self.term_receive, args=(buff,port), daemon=True)
         self.recv_prc.start()
         self.port = port
         self.host = ip
@@ -239,7 +218,31 @@ class MessengerTerminal():
                 break
         UDPSock.close()
         self.recv_prc.terminate()
-        self.recv_prc.join()
+        self.recv_prc.join()   
+        
+        
+def msg_listen(queue, port=13000):
+    buff = 1024
+    recv_sock = socket(AF_INET, SOCK_DGRAM)
+    recv_sock.bind(('', port))
+    while True:
+        (data, addr) = recv_sock.recvfrom(buff)
+        queue.put((data,addr))
+
+    
+def msgr_init():
+    msg_queue = Queue()
+    msg_read = Process(target=msg_listen, args=(msg_queue,))
+    msg_read.daemon = True
+    msg_read.start()
+    msgr = Messenger(msg_queue, msgr_exit)
+    
+    
+def msgr_exit():
+    msg_read.terminate()
+    msg_read.join()
+    msg_proc.terminate()
+    msg_proc.join()
 
 
 if __name__ == "__main__":    
@@ -248,8 +251,5 @@ if __name__ == "__main__":
             if arg.count('.') == 3:
                 MessengerTerminal(arg)
     else:
-        msg_queue = Queue()
-        msg_read = Process(target=msg_listen, args=(msg_queue,))
-        msg_read.start()
-        msg_proc = Process(target=msgr_init, args=(msg_queue,))
-        msg_proc.start()
+        msgr_proc = Process(target=msgr_init)
+        msgr_proc.start()
